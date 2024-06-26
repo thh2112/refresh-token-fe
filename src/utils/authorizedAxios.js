@@ -1,48 +1,61 @@
 // Author: HuyHoangDev
-import axios from 'axios'
-import { toast } from 'react-toastify'
+import axios from "axios";
+import { refreshTokenAPI } from "~/apis/index";
+const axiosClient = axios.create();
 
-const axiosClient = axios.create()
-
-axiosClient.defaults.timeout = 1000 * 60 * 5
-axiosClient.defaults.withCredentials = true
+axiosClient.defaults.timeout = 1000 * 60 * 5;
+axiosClient.defaults.withCredentials = true;
 
 axiosClient.interceptors.request.use(
   function (config) {
-    // Do something before request is sent
-    // get token from local storage assign to header
-    const accessToken = localStorage.getItem('accessToken')
+    const accessToken = localStorage.getItem("accessToken");
     if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`
+      config.headers.Authorization = `Bearer ${accessToken}`;
     }
-    return config
+    return config;
   },
   function (error) {
-    // Do something with request error
-    return Promise.reject(error)
-  }
-)
+    return Promise.reject(error);
+  },
+);
 
-// Add a response interceptor
+let refreshTokenPromise = null;
+
 axiosClient.interceptors.response.use(
-  function (response) {
-    // Any status code that lie within the range of 2xx cause this function to trigger
-    // Do something with esponse data
+  (response) => {
     return {
-        data: response.data,
-        status: response.status,
-        statusText: response.statusText
-    }
+      data: response.data,
+      status: response.status,
+      statusText: response.statusText,
+    };
   },
-  function (error) {
-    // Any status codes that falls outside the range of 2xx cause this function to trigger
-    // Do something with response error
+  (error) => {
+    const originRequest = error.config;
+    if (error.response?.status === 410 && !originRequest._retry) {
+      if (!refreshTokenPromise) {
+        const refreshToken = localStorage.getItem("refreshToken");
+        refreshTokenPromise = refreshTokenAPI(refreshToken)
+          .then((res) => {
+            return res.data?.accessToken
+          })
+          .catch((err) => {
+            // remove data in local storage and redirect to login page
+            location.href = "/login";
+          })
+          .finally(() => {
+            refreshTokenPromise = null;
+          });
+      }
 
-    if (error.response?.status === 410) {
-      toast.error(error.response?.data?.message)
+      return refreshTokenPromise.then((accessToken) => {
+        localStorage.setItem("accessToken", accessToken);
+        axiosClient.defaults.headers.Authorization = `Bearer ${accessToken}`;
+        return axiosClient(originRequest);
+      });
     }
-    return Promise.reject(error)
-  }
-)
 
-export default axiosClient
+    return Promise.reject(error);
+  },
+);
+
+export default axiosClient;

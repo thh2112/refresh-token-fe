@@ -25,6 +25,13 @@ function Dashboard() {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    const fetchData = async () => {
+      await axiosClient.get(`${API_ROOT}/v1/dashboards/access`)
+    }
+    fetchData()
+  }, [])
+
   if (!user) {
     return (
       <Box sx={{
